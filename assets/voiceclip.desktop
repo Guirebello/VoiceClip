@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=VoiceClip
+Comment=Voice-to-clipboard transcription
+Exec=VoiceClip
+Icon=voiceclip
+Type=Application
+Categories=Utility;Audio;

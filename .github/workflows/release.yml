@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  build-linux:
+    needs: create-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libgtk4-layer-shell-dev \
+            libasound2-dev \
+            cmake \
+            build-essential
+
+      - name: Clone and build whisper.cpp
+        run: |
+          git clone --depth 1 --branch v1.8.3 https://github.com/ggerganov/whisper.cpp.git
+          cd whisper.cpp
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build VoiceClip
+        run: cargo build --release
+
+      - name: Download Whisper model
+        run: |
+          mkdir -p staging/models
+          curl -L -o staging/models/base.en \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+
+      - name: Package release archive
+        run: |
+          mkdir -p staging
+          cp target/release/VoiceClip staging/
+          cp whisper.cpp/build/bin/whisper-cli staging/
+          chmod +x staging/VoiceClip staging/whisper-cli
+          cd staging
+          tar czf ../VoiceClip-linux-x86_64.tar.gz \
+            --transform 's,^,VoiceClip-linux-x86_64/,' \
+            VoiceClip whisper-cli models/
+
+      - name: Upload Linux archive
+        uses: softprops/action-gh-release@v2
+        with:
+          files: VoiceClip-linux-x86_64.tar.gz
+
+  build-windows:
+    needs: create-release
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-ntldd
+            git
+            make
+            tar
+            zip
+
+      - name: Clone and build whisper.cpp
+        run: |
+          git clone --depth 1 --branch v1.8.3 https://github.com/ggerganov/whisper.cpp.git
+          cd whisper.cpp
+          cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install stable
+          rustup default stable
+          rustup target add x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build VoiceClip
+        run: |
+          export PATH="/c/Users/runneradmin/.rustup/toolchains/stable-x86_64-pc-windows-msvc/bin:$PATH"
+          cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: Download Whisper model
+        run: |
+          mkdir -p staging/models
+          curl -L -o staging/models/base.en \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+
+      - name: Collect DLLs and package
+        run: |
+          mkdir -p staging
+          cp target/x86_64-pc-windows-gnu/release/VoiceClip.exe staging/
+          cp whisper.cpp/build/bin/whisper-cli.exe staging/
+
+          # Collect required DLLs using ntldd
+          for exe in staging/VoiceClip.exe staging/whisper-cli.exe; do
+            ntldd -R "$exe" | grep -i mingw64 | awk '{print $3}' | while read dll; do
+              [ -f "$dll" ] && cp -n "$dll" staging/
+            done
+          done
+
+          # Also copy GLib schema files and GDK pixbuf loaders if present
+          MINGW_PREFIX="/mingw64"
+          if [ -d "$MINGW_PREFIX/share/glib-2.0/schemas" ]; then
+            mkdir -p staging/share/glib-2.0/schemas
+            cp "$MINGW_PREFIX/share/glib-2.0/schemas/gschemas.compiled" \
+               staging/share/glib-2.0/schemas/ 2>/dev/null || true
+          fi
+
+          # Copy GDK pixbuf loaders
+          if [ -d "$MINGW_PREFIX/lib/gdk-pixbuf-2.0" ]; then
+            cp -r "$MINGW_PREFIX/lib/gdk-pixbuf-2.0" staging/lib/ 2>/dev/null || true
+          fi
+
+          cd staging
+          zip -r ../VoiceClip-windows-x86_64.zip ./*
+
+      - name: Upload Windows archive
+        uses: softprops/action-gh-release@v2
+        with:
+          files: VoiceClip-windows-x86_64.zip

@@ -33,6 +33,16 @@ impl Config {
     }
 
     pub fn get_models_dir() -> Result<PathBuf> {
+        // Check for bundled models next to executable first
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let bundled_models = dir.join("models");
+                if bundled_models.exists() {
+                    return Ok(bundled_models);
+                }
+            }
+        }
+        // Fallback to system data directory
         let proj_dirs = ProjectDirs::from("", "", "voiceclip")
             .context("Could not find project directories")?;
         Ok(proj_dirs.data_local_dir().join("models"))

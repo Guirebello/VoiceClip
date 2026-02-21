@@ -2,9 +2,22 @@ use std::path::Path;
 use tokio::process::Command;
 use anyhow::{Context, Result};
 
+/// Resolve whisper-cli path: check next to our executable first, then fall back to PATH.
+fn get_whisper_cli_path() -> String {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let bundled = dir.join(if cfg!(windows) { "whisper-cli.exe" } else { "whisper-cli" });
+            if bundled.exists() {
+                return bundled.to_string_lossy().to_string();
+            }
+        }
+    }
+    "whisper-cli".to_string()
+}
+
 pub async fn transcribe(wav_path: &Path, model_path: &Path) -> Result<String> {
     // whisper-cli -m model.bin -f file.wav --output-txt --no-timestamps -l auto
-    let output = Command::new("whisper-cli")
+    let output = Command::new(get_whisper_cli_path())
         .arg("-m")
         .arg(model_path)
         .arg("-f")
