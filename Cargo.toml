@@ -1,0 +1,16 @@
+[package]
+name = "VoiceClip"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+cpal = "0.17.3"
+directories = "6.0.0"
+gtk4 = "0.10"
+gtk4-layer-shell = "0.7.1"
+hound = "3.5.1"
+rusqlite = "0.38.0"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.49.0", features = ["full"] }
+toml = "1.0.3"
