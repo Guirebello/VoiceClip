@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, Stream};
+use dasp_sample::FromSample;
 use hound::{WavSpec, WavWriter};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::Duration;
 
 pub struct AudioRecorder {
     stream: Stream,
@@ -55,7 +55,6 @@ impl AudioRecorder {
         sender: Sender<f32>,
     ) -> Result<Stream> {
         let channels = config.channels();
-        let sample_rate = config.sample_rate().0;
 
         let stream_config = config.config();
         Ok(match config.sample_format() {
@@ -86,12 +85,13 @@ impl AudioRecorder {
     fn write_input_data<T>(input: &[T], channels: u16, sender: Sender<f32>)
     where
         T: Sample,
+        f32: FromSample<T>,
     {
         // simplistic downmix to mono by averaging channels if > 1
         for frame in input.chunks(channels as usize) {
             let mut sum = 0.0;
-            for sample in frame {
-                sum += sample.to_f32();
+            for &sample in frame {
+                sum += f32::from_sample_(sample);
             }
             let _ = sender.send(sum / channels as f32);
         }
