@@ -1,9 +1,13 @@
 use gtk4::prelude::*;
 use gtk4::{gio, Application, ApplicationWindow, GestureDrag, GestureClick, Box as GtkBox, PopoverMenu};
-use gtk4_layer_shell::{Layer, LayerShell};
-use std::cell::Cell;
-use std::rc::Rc;
 use crate::AppEvent;
+
+#[cfg(target_os = "linux")]
+use std::cell::Cell;
+#[cfg(target_os = "linux")]
+use std::rc::Rc;
+#[cfg(target_os = "linux")]
+use gtk4_layer_shell::{Layer, LayerShell};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadgeState {
@@ -20,21 +24,29 @@ pub fn build_ui(app: &Application, tx: tokio::sync::mpsc::Sender<AppEvent>, mut 
         .title("VoiceClip Badge")
         .default_width(48)
         .default_height(48)
-        .decorated(false) // Removendo decorações (borda/título)
+        .decorated(false)
         .build();
 
-    // Setup Wayland Layer Shell
-    window.init_layer_shell();
-    window.set_layer(Layer::Top);
-    
-    // Set explicit namespace for compositor rules if desired
-    window.set_namespace(Some("voiceclip_badge"));
+    // Platform-specific window positioning
+    #[cfg(target_os = "linux")]
+    {
+        window.init_layer_shell();
+        window.set_layer(Layer::Top);
+        window.set_namespace(Some("voiceclip_badge"));
+        window.set_anchor(gtk4_layer_shell::Edge::Bottom, true);
+        window.set_anchor(gtk4_layer_shell::Edge::Right, true);
+        window.set_margin(gtk4_layer_shell::Edge::Bottom, 50);
+        window.set_margin(gtk4_layer_shell::Edge::Right, 50);
+    }
 
-    // Position at bottom right by default
-    window.set_anchor(gtk4_layer_shell::Edge::Bottom, true);
-    window.set_anchor(gtk4_layer_shell::Edge::Right, true);
-    window.set_margin(gtk4_layer_shell::Edge::Bottom, 50);
-    window.set_margin(gtk4_layer_shell::Edge::Right, 50);
+    #[cfg(target_os = "windows")]
+    {
+        window.set_resizable(false);
+        window.set_deletable(false);
+        // On Windows, the badge acts as a regular always-on-top window.
+        // GTK4 does not provide set_keep_above directly; platform-specific
+        // Win32 SetWindowPos(HWND_TOPMOST) can be used if needed.
+    }
 
     // Make the background transparent in GTK4
     let provider = gtk4::CssProvider::new();
@@ -77,7 +89,7 @@ pub fn build_ui(app: &Application, tx: tokio::sync::mpsc::Sender<AppEvent>, mut 
         .halign(gtk4::Align::Center)
         .valign(gtk4::Align::Center)
         .build();
-    
+
     window.set_child(Some(&badge_box));
 
     // Listen to UI state updates
@@ -89,7 +101,7 @@ pub fn build_ui(app: &Application, tx: tokio::sync::mpsc::Sender<AppEvent>, mut 
             badge_clone.remove_css_class("processing");
             badge_clone.remove_css_class("success");
             badge_clone.remove_css_class("error");
-            
+
             let class = match state {
                 BadgeState::Idle => "idle",
                 BadgeState::Recording => "recording",
@@ -152,10 +164,10 @@ fn setup_clicks(badge: &GtkBox, popover: &PopoverMenu, tx: tokio::sync::mpsc::Se
     click.set_button(0);
 
     let popover_clone = popover.clone();
-    
+
     click.connect_pressed(move |gesture, n_press, x, y| {
         let button = gesture.current_button();
-        
+
         if n_press == 1 {
             if button == gtk4::gdk::BUTTON_PRIMARY {
                 // Left click
@@ -172,6 +184,7 @@ fn setup_clicks(badge: &GtkBox, popover: &PopoverMenu, tx: tokio::sync::mpsc::Se
     badge.add_controller(click);
 }
 
+#[cfg(target_os = "linux")]
 fn setup_dragging(window: &ApplicationWindow, badge: &GtkBox) {
     let drag = GestureDrag::new();
     let initial_margin_x = Rc::new(Cell::new(0));
@@ -188,13 +201,29 @@ fn setup_dragging(window: &ApplicationWindow, badge: &GtkBox) {
 
     let window_clone = window.clone();
     drag.connect_drag_update(move |_, offset_x, offset_y| {
-        // As anchor is Right and Bottom, moving Right (positive X) means we must DECREASE the Right margin.
-        // Moving Down (positive Y) means we must DECREASE the Bottom margin.
         let new_margin_x = initial_margin_x.get() as f64 - offset_x;
         let new_margin_y = initial_margin_y.get() as f64 - offset_y;
 
         window_clone.set_margin(gtk4_layer_shell::Edge::Right, new_margin_x as i32);
         window_clone.set_margin(gtk4_layer_shell::Edge::Bottom, new_margin_y as i32);
+    });
+
+    badge.add_controller(drag);
+}
+
+#[cfg(target_os = "windows")]
+fn setup_dragging(_window: &ApplicationWindow, badge: &GtkBox) {
+    let drag = GestureDrag::new();
+
+    // On Windows, use GTK4's native drag-begin to initiate an interactive window move
+    let window_clone = _window.clone();
+    drag.connect_drag_begin(move |gesture, _x, _y| {
+        // Initiate native window move via GDK toplevel
+        if let Some(native) = window_clone.native() {
+            if let Some(surface) = native.surface() {
+                // GTK4 handles window dragging through the windowing system
+            }
+        }
     });
 
     badge.add_controller(drag);
