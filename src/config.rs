@@ -10,6 +10,7 @@ pub struct Config {
     pub hotkey: String,
     pub badge_opacity: f32,
     pub max_recording_duration: u32,
+    pub append_mode: bool,
 }
 
 impl Default for Config {
@@ -19,6 +20,7 @@ impl Default for Config {
             hotkey: "Super+Shift+V".to_string(),
             badge_opacity: 0.8,
             max_recording_duration: 120,
+            append_mode: false,
         }
     }
 }
