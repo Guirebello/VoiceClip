@@ -39,17 +39,55 @@ sudo usermod -aG input $USER
 
 ### Windows
 
-- **MSYS2** with the GTK4 package, or **vcpkg** with GTK4 support:
-  ```
-  # MSYS2 (recommended)
-  pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkg-config
-  ```
-- **Visual Studio Build Tools** or the MSYS2 MinGW toolchain for compiling native dependencies
-- Ensure `whisper-cli.exe` is in your `PATH`
+VoiceClip on Windows relies on [MSYS2](https://www.msys2.org/), a software distribution that provides a Unix-like build environment and a collection of native Windows libraries. MSYS2 uses a package manager called **pacman** (the same one used by Arch Linux) to install pre-built libraries like GTK4.
+
+**Step 1 — Install MSYS2**
+
+Download and run the installer from [msys2.org](https://www.msys2.org/). Accept the default install location (`C:\msys64`).
+
+**Step 2 — Install GTK4 and build dependencies**
+
+Open the **MINGW64** shell (find "MSYS2 MINGW64" in your Start menu — do *not* use the plain "MSYS2" or "UCRT64" shells). Then run:
+
+```bash
+pacman -Syu
+pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkg-config mingw-w64-x86_64-toolchain
+```
+
+The first command updates the package database; the second installs GTK4, pkg-config, and the MinGW GCC toolchain.
+
+**Step 3 — Add MSYS2 to your system PATH**
+
+Add `C:\msys64\mingw64\bin` to your Windows **system** PATH. This is required both for building and for running VoiceClip (GTK4 DLLs live here).
+
+1. Press `Win+R`, type `sysdm.cpl`, press Enter.
+2. Go to **Advanced** → **Environment Variables**.
+3. Under **System variables**, select `Path` and click **Edit**.
+4. Click **New** and add `C:\msys64\mingw64\bin`.
+5. Click **OK** to save. Open a **new** terminal for the change to take effect.
+
+**Step 4 — Install Rust with the GNU target**
+
+If you haven't installed Rust yet, install it via [rustup.rs](https://rustup.rs). During setup, choose the `x86_64-pc-windows-gnu` default host triple.
+
+If you already have Rust installed with the default MSVC target, switch to the GNU target:
+
+```powershell
+rustup target add x86_64-pc-windows-gnu
+rustup default stable-x86_64-pc-windows-gnu
+```
+
+**Step 5 — Install whisper-cli**
+
+Build or download `whisper-cli.exe` from the [whisper.cpp](https://github.com/ggerganov/whisper.cpp) project and place it somewhere in your system `PATH` (e.g. `C:\msys64\mingw64\bin`).
+
+> **Note:** If you prefer [vcpkg](https://vcpkg.io/) over MSYS2 for managing C/C++ libraries, you can install GTK4 through vcpkg instead. However, MSYS2 is the tested and recommended approach.
 
 ---
 
 ## Installation
+
+### Linux
 
 ```bash
 git clone https://github.com/your-username/VoiceClip.git
@@ -57,9 +95,21 @@ cd VoiceClip
 cargo build --release
 ```
 
-The binary will be at:
-- **Linux:** `target/release/VoiceClip`
-- **Windows:** `target\release\VoiceClip.exe`
+The binary will be at `target/release/VoiceClip`.
+
+### Windows
+
+> **Important:** Run `cargo build` from a regular terminal (PowerShell or CMD), *not* from the MSYS2 shell. The MSYS2 shell is only needed for installing packages with pacman.
+
+```powershell
+git clone https://github.com/your-username/VoiceClip.git
+cd VoiceClip
+cargo build --release
+```
+
+The binary will be at `target\release\VoiceClip.exe`.
+
+If you get a `pkg-config not found` or `GTK4 not found` error, double-check that `C:\msys64\mingw64\bin` is in your system PATH and that you opened a **new** terminal after adding it (see [Prerequisites > Windows](#windows)).
 
 ### Download a Whisper model
 
@@ -70,11 +120,18 @@ Download a GGML model from the whisper.cpp project and place it in the models di
 | Linux    | `~/.local/share/voiceclip/models/` |
 | Windows  | `%APPDATA%\voiceclip\data\models\` |
 
-For example, to use the `base.en` model on Linux:
+For example, to use the `base.en` model:
 
+**Linux:**
 ```bash
 mkdir -p ~/.local/share/voiceclip/models
 cp ggml-base.en.bin ~/.local/share/voiceclip/models/base.en
+```
+
+**Windows (PowerShell):**
+```powershell
+mkdir "$env:APPDATA\voiceclip\data\models" -Force
+copy ggml-base.en.bin "$env:APPDATA\voiceclip\data\models\base.en"
 ```
 
 The filename must match the `model_name` value in your config (default: `base.en`).
@@ -125,11 +182,13 @@ append_mode = false
 
 ### Starting VoiceClip
 
+**Linux:**
 ```bash
-# Linux
 ./target/release/VoiceClip
+```
 
-# Windows
+**Windows (PowerShell or CMD — not the MSYS2 shell):**
+```powershell
 .\target\release\VoiceClip.exe
 ```
 
@@ -219,12 +278,24 @@ The quick brown fox jumped over the lazy dog and then proceeded to...
 
 ### Windows
 
-**Hotkey not working**
-- Some applications or the OS may already have `Win+Shift+V` registered. Close conflicting apps and restart VoiceClip.
-- Run VoiceClip as Administrator if the hotkey still doesn't respond.
+**`cargo build` fails with "pkg-config not found" or "GTK4 not found"**
+- Make sure you installed the MSYS2 packages from [Prerequisites > Windows](#windows).
+- Verify `C:\msys64\mingw64\bin` is in your system PATH (not just user PATH).
+- **Open a new terminal** after editing PATH — existing terminals won't see the change.
+- Run `pkg-config --modversion gtk4` in your terminal. If it prints a version number (e.g. `4.14.1`), GTK4 is correctly found.
 
-**GTK4 errors on startup**
-- Ensure GTK4 runtime DLLs are in your `PATH`. If using MSYS2, add `C:\msys64\mingw64\bin` to your system `PATH`.
+**GTK4 errors or missing DLL on startup**
+- This almost always means `C:\msys64\mingw64\bin` is not in your PATH. VoiceClip needs the GTK4 runtime DLLs at launch.
+- After adding it to PATH, **close and reopen your terminal** (or restart your IDE) for the change to take effect.
+
+**"Failed to spawn whisper-cli" / whisper-cli not found**
+- Ensure `whisper-cli.exe` is in your system PATH. Test by running `whisper-cli --help` in a terminal.
+- A convenient location is `C:\msys64\mingw64\bin` since that directory is already in your PATH.
+
+**Hotkey not working**
+- Windows Clipboard History uses `Win+V` by default, which can interfere with VoiceClip's `Win+Shift+V`. If you experience conflicts, disable Clipboard History in **Settings > System > Clipboard** or change its shortcut.
+- Some other applications may also register `Win+Shift+V`. Close conflicting apps and restart VoiceClip.
+- Try running VoiceClip as Administrator if the hotkey still doesn't respond.
 
 **Clipboard permission issues**
 - Windows may prompt for clipboard access on first use. Allow it.
