@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
@@ -9,6 +9,24 @@ pub struct SessionRecord {
     pub duration_secs: u32,
     pub word_count: u32,
     pub model_used: String,
+    pub transcription: String,
+    pub latency_ms: u32,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StatsSummary {
+    pub total_recordings: u32,
+    pub total_seconds: u32,
+    pub avg_words: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionRow {
+    pub id: i64,
+    pub started_at: i64,
+    pub duration_secs: u32,
+    pub word_count: u32,
     pub transcription: String,
     pub latency_ms: u32,
     pub error: Option<String>,
@@ -64,6 +82,44 @@ impl Database {
         ).context("Failed to insert session record")?;
 
         Ok(())
+    }
+
+    pub fn get_stats_summary(&self) -> Result<StatsSummary> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*), COALESCE(SUM(duration_secs),0), COALESCE(AVG(word_count),0)
+             FROM sessions WHERE error IS NULL"
+        )?;
+        let summary = stmt.query_row([], |row| {
+            Ok(StatsSummary {
+                total_recordings: row.get(0)?,
+                total_seconds: row.get(1)?,
+                avg_words: row.get(2)?,
+            })
+        })?;
+        Ok(summary)
+    }
+
+    pub fn get_recent_sessions(&self, limit: u32) -> Result<Vec<SessionRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, started_at, duration_secs, word_count, transcription, latency_ms, error
+             FROM sessions ORDER BY started_at DESC LIMIT ?"
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            Ok(SessionRow {
+                id: row.get(0)?,
+                started_at: row.get(1)?,
+                duration_secs: row.get(2)?,
+                word_count: row.get(3)?,
+                transcription: row.get(4)?,
+                latency_ms: row.get(5)?,
+                error: row.get(6)?,
+            })
+        })?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
     }
 }
 

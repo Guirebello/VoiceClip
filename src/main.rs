@@ -7,9 +7,7 @@ mod hotkey;
 mod ui;
 
 use config::Config;
-use audio::AudioRecorder;
 use anyhow::Result;
-use tokio::time::{sleep, Duration};
 use gtk4::prelude::*;
 use gtk4::Application;
 use gtk4::glib;
@@ -118,7 +116,7 @@ async fn main() -> Result<()> {
                         match stop_res {
                             Ok(()) => {
                                 let start_time = std::time::Instant::now();
-                                let model_dir = config::Config::get_models_dir().unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
+                                let model_dir = config::Config::get_models_dir().unwrap_or_else(|_| std::env::temp_dir());
                                 let model_path = model_dir.join(&config.model_name);
                                 let model_path_clone = model_path.clone();
                                 
@@ -127,10 +125,21 @@ async fn main() -> Result<()> {
                                         let latency_ms = start_time.elapsed().as_millis() as u32;
                                         println!("Transcription output: {}", text);
 
-                                        if let Err(e) = delivery::copy_to_clipboard(&text, config.append_mode).await {
-                                            eprintln!("Delivery failed: {:?}", e);
+                                        {
+                                            let text_clone = text.clone();
+                                            let append = config.append_mode;
+                                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                                delivery::copy_to_clipboard(&text_clone, append)
+                                            }).await.unwrap_or_else(|e| Err(anyhow::anyhow!(e))) {
+                                                eprintln!("Delivery failed: {:?}", e);
+                                            }
                                         }
-                                        let _ = delivery::notify("VoiceClip Success", &text, false).await;
+                                        {
+                                            let text_clone = text.clone();
+                                            let _ = tokio::task::spawn_blocking(move || {
+                                                delivery::notify("VoiceClip Success", &text_clone, false)
+                                            }).await;
+                                        }
                                         
                                         let word_count = text.split_whitespace().count() as u32;
                                         let duration_secs = (db::current_timestamp() - recording_start_time) as u32;
@@ -160,7 +169,9 @@ async fn main() -> Result<()> {
                                     Err(e) => {
                                         eprintln!("Transcription failed: {:?}", e);
                                         let _ = ui_tx.send(ui::badge::BadgeState::Error);
-                                        let _ = delivery::notify("VoiceClip Error", "Failed to transcribe audio", true).await;
+                                        let _ = tokio::task::spawn_blocking(|| {
+                                            delivery::notify("VoiceClip Error", "Failed to transcribe audio", true)
+                                        }).await;
                                         
                                         let duration_secs = (db::current_timestamp() - recording_start_time) as u32;
                                         let session = db::SessionRecord {
@@ -197,7 +208,13 @@ async fn main() -> Result<()> {
                     }
                 }
                 AppEvent::ShowStats => {
-                    println!("Showing stats...");
+                    let db_clone = db.clone();
+                    glib::MainContext::default().invoke(move || {
+                        if let Some(app) = gtk4::gio::Application::default() {
+                            let app = app.downcast::<Application>().unwrap();
+                            ui::stats::show_stats_window(&app, &db_clone);
+                        }
+                    });
                 }
                 AppEvent::ShowSettings => {
                     println!("Showing settings...");
