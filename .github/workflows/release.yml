@@ -24,7 +24,7 @@ jobs:
 
   build-linux:
     needs: create-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -94,9 +94,9 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-ninja
             mingw-w64-x86_64-ntldd
             git
-            make
             tar
             zip
 
@@ -104,7 +104,7 @@ jobs:
         run: |
           git clone --depth 1 --branch v1.8.3 https://github.com/ggerganov/whisper.cpp.git
           cd whisper.cpp
-          cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release -j$(nproc)
 
       - name: Install Rust toolchain
