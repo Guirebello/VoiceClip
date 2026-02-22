@@ -49,9 +49,15 @@ pub fn start_hotkey_listener(tx: Sender<AppEvent>, _configured_hotkey: &str) {
 pub fn start_hotkey_listener(tx: Sender<AppEvent>, _configured_hotkey: &str) {
     use global_hotkey::{GlobalHotKeyManager, GlobalHotKeyEvent, hotkey::{HotKey, Modifiers, Code}};
 
+    // GlobalHotKeyManager contains a raw pointer that isn't Send,
+    // but it is safe to move to another thread as long as we keep it alive.
+    struct SendManager(GlobalHotKeyManager);
+    unsafe impl Send for SendManager {}
+
     let hotkey = HotKey::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyV);
     let manager = GlobalHotKeyManager::new().unwrap();
     manager.register(hotkey).unwrap();
+    let manager = SendManager(manager);
 
     std::thread::spawn(move || {
         let _manager = manager; // prevent drop

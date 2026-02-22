@@ -14,16 +14,18 @@ pub fn copy_to_clipboard(text: &str, append_mode: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn notify(title: &str, body: &str, is_error: bool) -> Result<()> {
-    let urgency = if is_error {
-        notify_rust::Urgency::Critical
-    } else {
-        notify_rust::Urgency::Normal
-    };
-    notify_rust::Notification::new()
-        .summary(title)
-        .body(body)
-        .urgency(urgency)
-        .show()?;
+pub fn notify(title: &str, body: &str, _is_error: bool) -> Result<()> {
+    let mut notification = notify_rust::Notification::new();
+    notification.summary(title).body(body);
+    #[cfg(target_os = "linux")]
+    {
+        let urgency = if _is_error {
+            notify_rust::Urgency::Critical
+        } else {
+            notify_rust::Urgency::Normal
+        };
+        notification.urgency(urgency);
+    }
+    notification.show()?;
     Ok(())
 }
