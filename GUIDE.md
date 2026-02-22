@@ -151,7 +151,7 @@ On first run, VoiceClip creates a default configuration file:
 
 ```toml
 model_name = "base.en"
-hotkey = "Super+Shift+V"
+hotkey = "Super+Alt+V"
 badge_opacity = 0.8
 max_recording_duration = 120
 append_mode = false
@@ -162,7 +162,7 @@ append_mode = false
 | Key | Type | Description |
 |-----|------|-------------|
 | `model_name` | string | Name of the Whisper model file in the models directory |
-| `hotkey` | string | Global hotkey combo (currently hardcoded to `Super+Shift+V`) |
+| `hotkey` | string | Global hotkey combo (default `Super+Alt+V`). Set to `None` to disable. Can be changed via right-click → Settings. |
 | `badge_opacity` | float | Opacity of the floating badge (0.0–1.0) |
 | `max_recording_duration` | integer | Maximum recording length in seconds |
 | `append_mode` | bool | If `true`, new transcriptions are appended to existing clipboard text instead of replacing it |
@@ -196,12 +196,12 @@ A small circular badge appears in the bottom-right corner of your screen. This b
 
 ### Recording workflow
 
-1. **Press `Super+Shift+V`** (or left-click the badge) to start recording.
+1. **Press `Super+Alt+V`** (or left-click the badge) to start recording.
    The badge turns **orange-red**.
 
 2. **Speak** into your microphone.
 
-3. **Press `Super+Shift+V` again** (or left-click the badge) to stop.
+3. **Press `Super+Alt+V` again** (or left-click the badge) to stop.
    The badge turns **blue** while Whisper transcribes your audio.
 
 4. When transcription completes, the text is copied to your clipboard and a desktop notification appears.
@@ -293,8 +293,10 @@ The quick brown fox jumped over the lazy dog and then proceeded to...
 - A convenient location is `C:\msys64\mingw64\bin` since that directory is already in your PATH.
 
 **Hotkey not working**
-- Windows Clipboard History uses `Win+V` by default, which can interfere with VoiceClip's `Win+Shift+V`. If you experience conflicts, disable Clipboard History in **Settings > System > Clipboard** or change its shortcut.
-- Some other applications may also register `Win+Shift+V`. Close conflicting apps and restart VoiceClip.
+- If another application has already registered the same hotkey, VoiceClip will print a warning and continue without a hotkey — you can still use badge clicks to record.
+- To change the hotkey, right-click the badge → **Settings**, enter a new combo (e.g. `Ctrl+Shift+R`), save, and restart.
+- You can also set the hotkey to `None` in Settings to disable it entirely.
+- Some other applications may register `Win+Alt+V`. Close conflicting apps and restart VoiceClip, or choose a different hotkey.
 - Try running VoiceClip as Administrator if the hotkey still doesn't respond.
 
 **Clipboard permission issues**

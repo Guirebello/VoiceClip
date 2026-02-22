@@ -217,7 +217,12 @@ async fn main() -> Result<()> {
                     });
                 }
                 AppEvent::ShowSettings => {
-                    println!("Showing settings...");
+                    glib::MainContext::default().invoke(move || {
+                        if let Some(app) = gtk4::gio::Application::default() {
+                            let app = app.downcast::<Application>().unwrap();
+                            ui::settings::show_settings_window(&app);
+                        }
+                    });
                 }
                 AppEvent::QuitApp => {
                     println!("Quitting application...");

@@ -17,7 +17,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             model_name: "base.en".to_string(),
-            hotkey: "Super+Shift+V".to_string(),
+            hotkey: "Super+Alt+V".to_string(),
             badge_opacity: 0.8,
             max_recording_duration: 120,
             append_mode: false,
