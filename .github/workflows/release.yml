@@ -132,6 +132,7 @@ jobs:
 
       - name: Collect DLLs and package
         run: |
+          set -x
           mkdir -p staging
           cp target/release/VoiceClip.exe staging/
           cp whisper.cpp/build/bin/whisper-cli.exe staging/
@@ -140,10 +141,10 @@ jobs:
           for exe in staging/VoiceClip.exe staging/whisper-cli.exe; do
             ntldd -R "$exe" | grep -i mingw64 | awk '{print $3}' | while read dll; do
               [ -f "$dll" ] && cp -n "$dll" staging/
-            done
+            done || true
           done
 
-          # Also copy GLib schema files and GDK pixbuf loaders if present
+          # Copy GLib schema files
           MINGW_PREFIX="/mingw64"
           if [ -d "$MINGW_PREFIX/share/glib-2.0/schemas" ]; then
             mkdir -p staging/share/glib-2.0/schemas
@@ -153,6 +154,7 @@ jobs:
 
           # Copy GDK pixbuf loaders
           if [ -d "$MINGW_PREFIX/lib/gdk-pixbuf-2.0" ]; then
+            mkdir -p staging/lib
             cp -r "$MINGW_PREFIX/lib/gdk-pixbuf-2.0" staging/lib/ 2>/dev/null || true
           fi
 
