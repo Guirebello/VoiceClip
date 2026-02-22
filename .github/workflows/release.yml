@@ -33,10 +33,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libasound2-dev \
             cmake \
-            build-essential
+            build-essential \
+            meson \
+            ninja-build \
+            libwayland-dev \
+            libgirepository1.0-dev \
+            gobject-introspection
+
+      - name: Build and install gtk4-layer-shell from source
+        run: |
+          git clone --depth 1 --branch v1.1.0 https://github.com/wmww/gtk4-layer-shell.git
+          cd gtk4-layer-shell
+          meson setup build -Dtests=false -Dexamples=false -Ddocs=false -Dsmoke-tests=false
+          ninja -C build
+          sudo ninja -C build install
+          sudo ldconfig
 
       - name: Clone and build whisper.cpp
         run: |
@@ -96,6 +109,7 @@ jobs:
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-ntldd
+            mingw-w64-x86_64-rust
             git
             tar
             zip
@@ -107,19 +121,8 @@ jobs:
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release -j$(nproc)
 
-      - name: Install Rust toolchain
-        shell: pwsh
-        run: |
-          rustup toolchain install stable
-          rustup default stable
-          rustup target add x86_64-pc-windows-gnu
-
-      - uses: Swatinem/rust-cache@v2
-
       - name: Build VoiceClip
-        run: |
-          export PATH="/c/Users/runneradmin/.rustup/toolchains/stable-x86_64-pc-windows-msvc/bin:$PATH"
-          cargo build --release --target x86_64-pc-windows-gnu
+        run: cargo build --release
 
       - name: Download Whisper model
         run: |
@@ -130,7 +133,7 @@ jobs:
       - name: Collect DLLs and package
         run: |
           mkdir -p staging
-          cp target/x86_64-pc-windows-gnu/release/VoiceClip.exe staging/
+          cp target/release/VoiceClip.exe staging/
           cp whisper.cpp/build/bin/whisper-cli.exe staging/
 
           # Collect required DLLs using ntldd
