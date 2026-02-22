@@ -19,6 +19,7 @@ VoiceClip is a lightweight, always-on voice-to-clipboard desktop application. Pr
 
 ### Both Platforms
 
+- **Node.js** (v18+) — install from [nodejs.org](https://nodejs.org) or via a version manager like nvm
 - **Rust toolchain** (stable) — install via [rustup.rs](https://rustup.rs)
 - **whisper-cli** — the CLI binary from the [whisper.cpp](https://github.com/ggerganov/whisper.cpp) project, available in your system `PATH`
 - **A Whisper model file** — e.g. `ggml-base.en.bin`, placed in the models directory (see [Configuration](#configuration))
@@ -26,8 +27,8 @@ VoiceClip is a lightweight, always-on voice-to-clipboard desktop application. Pr
 ### Linux
 
 ```bash
-# GTK4 and layer-shell development libraries
-sudo apt install libgtk-4-dev libgtk4-layer-shell-dev
+# WebKitGTK and Tauri system dependencies
+sudo apt install libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev librsvg2-dev
 
 # ALSA headers for audio capture
 sudo apt install libasound2-dev
@@ -39,49 +40,12 @@ sudo usermod -aG input $USER
 
 ### Windows
 
-VoiceClip on Windows relies on [MSYS2](https://www.msys2.org/), a software distribution that provides a Unix-like build environment and a collection of native Windows libraries. MSYS2 uses a package manager called **pacman** (the same one used by Arch Linux) to install pre-built libraries like GTK4.
+- **Rust toolchain** — install via [rustup.rs](https://rustup.rs) with the default MSVC target (`x86_64-pc-windows-msvc`)
+- **Node.js** — install from [nodejs.org](https://nodejs.org)
+- **WebView2** — pre-installed on Windows 10 (version 1803+) and Windows 11. If missing, download from [Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+- **whisper-cli** — build or download `whisper-cli.exe` from the [whisper.cpp](https://github.com/ggerganov/whisper.cpp) project and place it in your system `PATH`
 
-**Step 1 — Install MSYS2**
-
-Download and run the installer from [msys2.org](https://www.msys2.org/). Accept the default install location (`C:\msys64`).
-
-**Step 2 — Install GTK4 and build dependencies**
-
-Open the **MINGW64** shell (find "MSYS2 MINGW64" in your Start menu — do *not* use the plain "MSYS2" or "UCRT64" shells). Then run:
-
-```bash
-pacman -Syu
-pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-pkg-config mingw-w64-x86_64-toolchain
-```
-
-The first command updates the package database; the second installs GTK4, pkg-config, and the MinGW GCC toolchain.
-
-**Step 3 — Add MSYS2 to your system PATH**
-
-Add `C:\msys64\mingw64\bin` to your Windows **system** PATH. This is required both for building and for running VoiceClip (GTK4 DLLs live here).
-
-1. Press `Win+R`, type `sysdm.cpl`, press Enter.
-2. Go to **Advanced** → **Environment Variables**.
-3. Under **System variables**, select `Path` and click **Edit**.
-4. Click **New** and add `C:\msys64\mingw64\bin`.
-5. Click **OK** to save. Open a **new** terminal for the change to take effect.
-
-**Step 4 — Install Rust with the GNU target**
-
-If you haven't installed Rust yet, install it via [rustup.rs](https://rustup.rs). During setup, choose the `x86_64-pc-windows-gnu` default host triple.
-
-If you already have Rust installed with the default MSVC target, switch to the GNU target:
-
-```powershell
-rustup target add x86_64-pc-windows-gnu
-rustup default stable-x86_64-pc-windows-gnu
-```
-
-**Step 5 — Install whisper-cli**
-
-Build or download `whisper-cli.exe` from the [whisper.cpp](https://github.com/ggerganov/whisper.cpp) project and place it somewhere in your system `PATH` (e.g. `C:\msys64\mingw64\bin`).
-
-> **Note:** If you prefer [vcpkg](https://vcpkg.io/) over MSYS2 for managing C/C++ libraries, you can install GTK4 through vcpkg instead. However, MSYS2 is the tested and recommended approach.
+> **Note:** Unlike the previous GTK4 build, no MSYS2 or MinGW toolchain is needed. Tauri uses the native Windows WebView2 runtime.
 
 ---
 
@@ -90,26 +54,29 @@ Build or download `whisper-cli.exe` from the [whisper.cpp](https://github.com/gg
 ### Linux
 
 ```bash
-git clone https://github.com/your-username/VoiceClip.git
+git clone https://github.com/Guirebello/VoiceClip.git
 cd VoiceClip
-cargo build --release
+npm install
+npm run tauri build
 ```
 
-The binary will be at `target/release/VoiceClip`.
+The binary will be at `src-tauri/target/release/VoiceClip`.
+
+For development with hot-reload:
+```bash
+npm run tauri dev
+```
 
 ### Windows
 
-> **Important:** Run `cargo build` from a regular terminal (PowerShell or CMD), *not* from the MSYS2 shell. The MSYS2 shell is only needed for installing packages with pacman.
-
 ```powershell
-git clone https://github.com/your-username/VoiceClip.git
+git clone https://github.com/Guirebello/VoiceClip.git
 cd VoiceClip
-cargo build --release
+npm install
+npm run tauri build
 ```
 
-The binary will be at `target\release\VoiceClip.exe`.
-
-If you get a `pkg-config not found` or `GTK4 not found` error, double-check that `C:\msys64\mingw64\bin` is in your system PATH and that you opened a **new** terminal after adding it (see [Prerequisites > Windows](#windows)).
+The binary will be at `src-tauri\target\release\VoiceClip.exe`.
 
 ### Download a Whisper model
 
@@ -155,6 +122,7 @@ hotkey = "Super+Alt+V"
 badge_opacity = 0.8
 max_recording_duration = 120
 append_mode = false
+always_on_top = true
 ```
 
 ### Options
@@ -166,6 +134,10 @@ append_mode = false
 | `badge_opacity` | float | Opacity of the floating badge (0.0–1.0) |
 | `max_recording_duration` | integer | Maximum recording length in seconds |
 | `append_mode` | bool | If `true`, new transcriptions are appended to existing clipboard text instead of replacing it |
+| `microphone` | string or null | Name of the input device to use. Omit or set to `null` to use the system default. Selectable via Settings. |
+| `always_on_top` | bool | If `true` (default), the badge stays above all other windows |
+| `badge_x` | integer or null | Saved X position of the badge window (set automatically when you drag the badge) |
+| `badge_y` | integer or null | Saved Y position of the badge window (set automatically when you drag the badge) |
 
 ### Key directories
 
@@ -184,12 +156,12 @@ append_mode = false
 
 **Linux:**
 ```bash
-./target/release/VoiceClip
+./src-tauri/target/release/VoiceClip
 ```
 
-**Windows (PowerShell or CMD — not the MSYS2 shell):**
+**Windows:**
 ```powershell
-.\target\release\VoiceClip.exe
+.\src-tauri\target\release\VoiceClip.exe
 ```
 
 A small circular badge appears in the bottom-right corner of your screen. This badge is your primary visual indicator.
@@ -226,6 +198,17 @@ A small circular badge appears in the bottom-right corner of your screen. This b
 | **Left-click** | Toggle recording on/off |
 | **Right-click** | Open context menu (Stats, Settings, Quit) |
 | **Drag** | Move the badge around the screen |
+
+### Settings
+
+Right-click the badge and select **Settings** to configure:
+
+- **Hotkey** — change the global hotkey combo or set to `None` to disable
+- **Microphone** — select which input device to use for recording
+- **Always on Top** — toggle whether the badge stays above all other windows
+- **Badge Opacity** — adjust the transparency of the floating badge
+
+Changes are saved to `config.toml` and take effect immediately (hotkey changes require a restart).
 
 ### Append mode
 
@@ -265,42 +248,38 @@ The quick brown fox jumped over the lazy dog and then proceeded to...
 - If not, run `sudo usermod -aG input $USER` and log out/in
 - Check that `/dev/input/` devices are readable: `ls -la /dev/input/event*`
 
-**Badge not appearing (Wayland)**
-- VoiceClip uses `gtk4-layer-shell` for Wayland compositors. Make sure your compositor supports the `wlr-layer-shell` protocol (Sway, Hyprland, and most wlroots-based compositors do).
-- On GNOME/Mutter, layer-shell support may be limited — the badge may appear as a regular window.
+**Badge not appearing or positioned incorrectly (Wayland)**
+- On Wayland, window positioning behavior depends on your compositor. Some compositors may ignore the requested position or place the window differently.
+- You may need to add a compositor rule for the VoiceClip window. For example, in Hyprland: `windowrulev2 = float,class:^(VoiceClip)$`
+- On GNOME/Mutter, the badge appears as a regular floating window.
 
 **"Failed to spawn whisper-cli"**
 - Ensure `whisper-cli` is installed and in your `PATH`: `which whisper-cli`
 - If installed elsewhere, you can symlink it: `sudo ln -s /path/to/whisper-cli /usr/local/bin/whisper-cli`
 
 **No audio / wrong microphone**
-- VoiceClip uses the system default input device. Change your default microphone in your system audio settings (e.g. `pavucontrol` on PulseAudio/PipeWire).
+- Open Settings (right-click badge → Settings) and select your preferred microphone from the dropdown.
+- If the dropdown is empty, check that your audio server (PulseAudio/PipeWire) is running and devices are available.
+
+**Build fails with missing WebKitGTK**
+- Install the required Tauri dependencies: `sudo apt install libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev librsvg2-dev`
 
 ### Windows
 
-**`cargo build` fails with "pkg-config not found" or "GTK4 not found"**
-- Make sure you installed the MSYS2 packages from [Prerequisites > Windows](#windows).
-- Verify `C:\msys64\mingw64\bin` is in your system PATH (not just user PATH).
-- **Open a new terminal** after editing PATH — existing terminals won't see the change.
-- Run `pkg-config --modversion gtk4` in your terminal. If it prints a version number (e.g. `4.14.1`), GTK4 is correctly found.
-
-**GTK4 errors or missing DLL on startup**
-- This almost always means `C:\msys64\mingw64\bin` is not in your PATH. VoiceClip needs the GTK4 runtime DLLs at launch.
-- After adding it to PATH, **close and reopen your terminal** (or restart your IDE) for the change to take effect.
-
 **"Failed to spawn whisper-cli" / whisper-cli not found**
 - Ensure `whisper-cli.exe` is in your system PATH. Test by running `whisper-cli --help` in a terminal.
-- A convenient location is `C:\msys64\mingw64\bin` since that directory is already in your PATH.
 
 **Hotkey not working**
 - If another application has already registered the same hotkey, VoiceClip will print a warning and continue without a hotkey — you can still use badge clicks to record.
 - To change the hotkey, right-click the badge → **Settings**, enter a new combo (e.g. `Ctrl+Shift+R`), save, and restart.
 - You can also set the hotkey to `None` in Settings to disable it entirely.
-- Some other applications may register `Win+Alt+V`. Close conflicting apps and restart VoiceClip, or choose a different hotkey.
 - Try running VoiceClip as Administrator if the hotkey still doesn't respond.
 
 **Clipboard permission issues**
 - Windows may prompt for clipboard access on first use. Allow it.
+
+**WebView2 missing**
+- WebView2 is pre-installed on Windows 10 (1803+) and Windows 11. If VoiceClip fails to start, download the WebView2 runtime from [Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
 
 ### Both platforms
 

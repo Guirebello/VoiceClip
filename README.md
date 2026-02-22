@@ -7,6 +7,9 @@ A lightweight, always-on voice-to-clipboard desktop app. Press a hotkey, speak, 
 - **Global hotkey** (`Win+Alt+V` / `Super+Alt+V`) to toggle recording from anywhere
 - **Local transcription** — powered by whisper.cpp, everything stays on your device
 - **Floating badge** — a small draggable indicator shows recording/processing/success state
+- **Audio waveform** — live waveform visualization on the badge while recording
+- **Microphone selection** — pick your input device from the Settings menu
+- **Always-on-top toggle** — keep the badge above other windows, or let it sit in the normal window stack
 - **Configurable hotkey** — change or disable via right-click badge > Settings
 - **Graceful fallback** — if the hotkey is taken by another app, VoiceClip continues without it (badge clicks still work)
 - **Append mode** — optionally append new transcriptions to existing clipboard text
@@ -29,8 +32,11 @@ Both packages include `whisper-cli` and the `base.en` model, so they work out of
 ```bash
 git clone https://github.com/Guirebello/VoiceClip.git
 cd VoiceClip
-cargo build --release
+npm install
+npm run tauri build
 ```
+
+The binary will be at `src-tauri/target/release/VoiceClip` (Linux) or `src-tauri\target\release\VoiceClip.exe` (Windows).
 
 See the [User Guide](GUIDE.md) for full prerequisites and platform-specific setup.
 
@@ -55,7 +61,7 @@ See the [User Guide](GUIDE.md) for full prerequisites and platform-specific setu
 ### Right-Click Menu
 
 - **Stats** — view recording history and metrics
-- **Settings** — change the global hotkey
+- **Settings** — change the global hotkey, select microphone, toggle always-on-top, adjust badge opacity
 - **Quit** — exit VoiceClip
 
 ## Configuration
@@ -73,9 +79,13 @@ hotkey = "Super+Alt+V"
 badge_opacity = 0.8
 max_recording_duration = 120
 append_mode = false
+microphone = "Default"
+always_on_top = true
+badge_x = 100
+badge_y = 100
 ```
 
-Set `hotkey = "None"` to disable the global hotkey (badge clicks still work).
+Set `hotkey = "None"` to disable the global hotkey (badge clicks still work). Omit `microphone` to use the system default. `badge_x`/`badge_y` save the badge position between sessions.
 
 See the [User Guide](GUIDE.md) for full configuration details, model setup, and troubleshooting.
 

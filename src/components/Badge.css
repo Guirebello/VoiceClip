@@ -1,0 +1,82 @@
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  width: 64px;
+  height: 64px;
+}
+
+.badge-container {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.badge.idle {
+  background-color: rgba(128, 128, 128, 0.8);
+}
+
+.badge.recording {
+  background-color: rgba(255, 69, 0, 0.9);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.badge.processing {
+  background-color: rgba(30, 144, 255, 0.9);
+}
+
+.badge.success {
+  background-color: rgba(50, 205, 50, 0.9);
+}
+
+.badge.error {
+  background-color: rgba(220, 20, 60, 0.9);
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.waveform-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+
+.badge-icon {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  z-index: 1;
+}

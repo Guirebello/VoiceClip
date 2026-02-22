@@ -54,7 +54,7 @@ pub fn start_hotkey_listener(tx: Sender<AppEvent>, configured_hotkey: &str) {
                         }
                     }
                     Err(_) => {
-                        break; // Device removed or error
+                        break;
                     }
                 }
             }
@@ -65,7 +65,6 @@ pub fn start_hotkey_listener(tx: Sender<AppEvent>, configured_hotkey: &str) {
 #[cfg(target_os = "linux")]
 #[derive(Clone)]
 struct ParsedEvdevHotkey {
-    /// Each modifier is a pair of (left, right) keycodes — either satisfies
     modifiers: Vec<(evdev::KeyCode, evdev::KeyCode)>,
     trigger: evdev::KeyCode,
 }
@@ -191,15 +190,13 @@ pub fn start_hotkey_listener(tx: Sender<AppEvent>, configured_hotkey: &str) {
         return;
     }
 
-    // GlobalHotKeyManager contains a raw pointer that isn't Send,
-    // but it is safe to move to another thread as long as we keep it alive.
     struct SendManager(GlobalHotKeyManager);
     unsafe impl Send for SendManager {}
 
     let manager = SendManager(manager);
 
     std::thread::spawn(move || {
-        let _manager = manager; // prevent drop
+        let _manager = manager;
         loop {
             if let Ok(_event) = GlobalHotKeyEvent::receiver().recv() {
                 let _ = tx.blocking_send(AppEvent::ToggleRecording);

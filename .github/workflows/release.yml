@@ -32,39 +32,38 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgtk-4-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
             libasound2-dev \
             cmake \
-            build-essential \
-            meson \
-            ninja-build \
-            libwayland-dev \
-            libgirepository1.0-dev \
-            gobject-introspection
+            build-essential
 
-      - name: Build and install gtk4-layer-shell from source
-        run: |
-          git clone --depth 1 --branch v1.1.0 https://github.com/wmww/gtk4-layer-shell.git
-          cd gtk4-layer-shell
-          meson setup build -Dtests=false -Dexamples=false -Ddocs=false -Dsmoke-tests=false -Dvapi=false -Dintrospection=false
-          ninja -C build
-          sudo ninja -C build install
-          sudo ldconfig
-
-      - name: Clone and build whisper.cpp
-        run: |
-          git clone --depth 1 --branch v1.8.3 https://github.com/ggerganov/whisper.cpp.git
-          cd whisper.cpp
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release -j$(nproc)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
-      - name: Build VoiceClip
-        run: cargo build --release
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Clone and build whisper.cpp
+        run: |
+          git clone --depth 1 --branch v1.8.3 https://github.com/ggerganov/whisper.cpp.git
+          cd whisper.cpp
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_VULKAN=OFF -DGGML_CUDA=OFF -DGGML_OPENCL=OFF
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Build VoiceClip with Tauri
+        run: npx tauri build
 
       - name: Download Whisper model
         run: |
@@ -75,7 +74,7 @@ jobs:
       - name: Package release archive
         run: |
           mkdir -p staging
-          cp target/release/VoiceClip staging/
+          cp src-tauri/target/release/VoiceClip staging/
           cp whisper.cpp/build/bin/whisper-cli staging/
           chmod +x staging/VoiceClip staging/whisper-cli
           cd staging
@@ -91,75 +90,47 @@ jobs:
   build-windows:
     needs: create-release
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
+      - uses: actions/setup-node@v4
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gtk4
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-ntldd
-            mingw-w64-x86_64-rust
-            git
-            tar
-            zip
+          node-version: 22
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
 
       - name: Clone and build whisper.cpp
         run: |
           git clone --depth 1 --branch v1.8.3 https://github.com/ggerganov/whisper.cpp.git
           cd whisper.cpp
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release -j$(nproc)
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_VULKAN=OFF -DGGML_CUDA=OFF -DGGML_OPENCL=OFF
+          cmake --build build --config Release
 
-      - name: Build VoiceClip
-        run: cargo build --release
+      - name: Build VoiceClip with Tauri
+        run: npx tauri build
 
       - name: Download Whisper model
         run: |
           mkdir -p staging/models
-          curl -L -o staging/models/base.en \
-            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+          curl -L -o staging/models/base.en https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
 
-      - name: Collect DLLs and package
+      - name: Package release archive
         run: |
-          set -x
           mkdir -p staging
-          cp target/release/VoiceClip.exe staging/
-          cp whisper.cpp/build/bin/whisper-cli.exe staging/
-
-          # Collect required DLLs using ntldd
-          for exe in staging/VoiceClip.exe staging/whisper-cli.exe; do
-            ntldd -R "$exe" | grep -i mingw64 | awk '{print $3}' | while read dll; do
-              [ -f "$dll" ] && cp -n "$dll" staging/
-            done || true
-          done
-
-          # Copy GLib schema files
-          MINGW_PREFIX="/mingw64"
-          if [ -d "$MINGW_PREFIX/share/glib-2.0/schemas" ]; then
-            mkdir -p staging/share/glib-2.0/schemas
-            cp "$MINGW_PREFIX/share/glib-2.0/schemas/gschemas.compiled" \
-               staging/share/glib-2.0/schemas/ 2>/dev/null || true
-          fi
-
-          # Copy GDK pixbuf loaders
-          if [ -d "$MINGW_PREFIX/lib/gdk-pixbuf-2.0" ]; then
-            mkdir -p staging/lib
-            cp -r "$MINGW_PREFIX/lib/gdk-pixbuf-2.0" staging/lib/ 2>/dev/null || true
-          fi
-
+          cp src-tauri/target/release/VoiceClip.exe staging/
+          cp whisper.cpp/build/bin/Release/whisper-cli.exe staging/
+          cp -r staging/models staging/
           cd staging
-          zip -r ../VoiceClip-windows-x86_64.zip ./*
+          Compress-Archive -Path * -DestinationPath ../VoiceClip-windows-x86_64.zip
+        shell: pwsh
 
       - name: Upload Windows archive
         uses: softprops/action-gh-release@v2

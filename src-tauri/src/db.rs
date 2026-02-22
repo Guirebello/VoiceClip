@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
+use serde::Serialize;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,14 +15,14 @@ pub struct SessionRecord {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct StatsSummary {
     pub total_recordings: u32,
     pub total_seconds: u32,
     pub avg_words: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SessionRow {
     pub id: i64,
     pub started_at: i64,
@@ -48,7 +49,6 @@ impl Database {
         let conn = Connection::open(db_path)
             .with_context(|| format!("Failed to open SQLite database at {:?}", db_path))?;
 
-        // Initialize schema
         conn.execute(
             "CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

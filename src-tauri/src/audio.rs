@@ -8,14 +8,22 @@ use std::sync::mpsc::{self, Receiver, Sender};
 pub struct AudioRecorder {
     stream: Stream,
     receiver: Receiver<f32>,
+    level_receiver: Receiver<f32>,
 }
 
 impl AudioRecorder {
-    pub fn start_recording() -> Result<Self> {
+    pub fn start_recording(device_name: Option<&str>) -> Result<Self> {
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .ok_or_else(|| anyhow!("Failed to get default input device"))?;
+
+        let device = if let Some(name) = device_name {
+            host.input_devices()?
+                .find(|d| d.name().map(|n| n == name).unwrap_or(false))
+                .or_else(|| host.default_input_device())
+                .ok_or_else(|| anyhow!("Failed to get input device"))?
+        } else {
+            host.default_input_device()
+                .ok_or_else(|| anyhow!("Failed to get default input device"))?
+        };
 
         let user_config = cpal::StreamConfig {
             channels: 1,
@@ -24,12 +32,20 @@ impl AudioRecorder {
         };
 
         let (sender, receiver) = mpsc::channel();
+        let (level_sender, level_receiver) = mpsc::channel();
 
+        let level_sender_clone = level_sender.clone();
         let stream = match device.build_input_stream(
             &user_config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                let mut sum_sq = 0.0f32;
                 for &sample in data {
                     let _ = sender.send(sample);
+                    sum_sq += sample * sample;
+                }
+                if !data.is_empty() {
+                    let rms = (sum_sq / data.len() as f32).sqrt();
+                    let _ = level_sender_clone.send(rms);
                 }
             },
             |err| eprintln!("an error occurred on stream: {}", err),
@@ -37,70 +53,93 @@ impl AudioRecorder {
         ) {
             Ok(s) => s,
             Err(_) => {
-                // Fallback to default config and conversion if 16kHz mono fails natively
                 let default_config = device.default_input_config()?;
-                let (sender, receiver) = mpsc::channel();
-                Self::build_fallback_stream(&device, &default_config, sender)?
+                let (sender, new_receiver) = mpsc::channel();
+                let (level_sender, new_level_receiver) = mpsc::channel();
+                let stream = Self::build_fallback_stream(&device, &default_config, sender, level_sender)?;
+                return Ok(Self {
+                    stream,
+                    receiver: new_receiver,
+                    level_receiver: new_level_receiver,
+                });
             }
         };
 
         stream.play()?;
 
-        Ok(Self { stream, receiver })
+        Ok(Self { stream, receiver, level_receiver })
     }
 
     fn build_fallback_stream(
         device: &cpal::Device,
         config: &cpal::SupportedStreamConfig,
         sender: Sender<f32>,
+        level_sender: Sender<f32>,
     ) -> Result<Stream> {
         let channels = config.channels();
 
         let stream_config = config.config();
-        Ok(match config.sample_format() {
+        let stream = match config.sample_format() {
             cpal::SampleFormat::F32 => device.build_input_stream(
                 &stream_config,
-                move |data: &[f32], _: &_| Self::write_input_data(data, channels, sender.clone()),
+                move |data: &[f32], _: &_| Self::write_input_data(data, channels, &sender, &level_sender),
                 |err| eprintln!("an error occurred on stream: {}", err),
                 None,
             )?,
             cpal::SampleFormat::I16 => device.build_input_stream(
                 &stream_config,
-                move |data: &[i16], _: &_| Self::write_input_data(data, channels, sender.clone()),
+                move |data: &[i16], _: &_| Self::write_input_data(data, channels, &sender, &level_sender),
                 |err| eprintln!("an error occurred on stream: {}", err),
                 None,
             )?,
             cpal::SampleFormat::U16 => device.build_input_stream(
                 &stream_config,
-                move |data: &[u16], _: &_| Self::write_input_data(data, channels, sender.clone()),
+                move |data: &[u16], _: &_| Self::write_input_data(data, channels, &sender, &level_sender),
                 |err| eprintln!("an error occurred on stream: {}", err),
                 None,
             )?,
             sample_format => {
                 return Err(anyhow!("Unsupported sample format '{sample_format}'"))
             }
-        })
+        };
+        stream.play()?;
+        Ok(stream)
     }
 
-    fn write_input_data<T>(input: &[T], channels: u16, sender: Sender<f32>)
+    fn write_input_data<T>(input: &[T], channels: u16, sender: &Sender<f32>, level_sender: &Sender<f32>)
     where
         T: Sample,
         f32: FromSample<T>,
     {
-        // simplistic downmix to mono by averaging channels if > 1
+        let mut sum_sq = 0.0f32;
+        let mut count = 0usize;
         for frame in input.chunks(channels as usize) {
             let mut sum = 0.0;
             for &sample in frame {
                 sum += f32::from_sample_(sample);
             }
-            let _ = sender.send(sum / channels as f32);
+            let mono = sum / channels as f32;
+            let _ = sender.send(mono);
+            sum_sq += mono * mono;
+            count += 1;
         }
+        if count > 0 {
+            let rms = (sum_sq / count as f32).sqrt();
+            let _ = level_sender.send(rms);
+        }
+    }
+
+    pub fn drain_levels(&self) -> f32 {
+        let mut last = 0.0f32;
+        while let Ok(level) = self.level_receiver.try_recv() {
+            last = level;
+        }
+        last
     }
 
     pub fn stop_recording_and_save(self, save_path: &str) -> Result<()> {
         let _ = self.stream.pause();
-        
-        // At this point we can drain the channel
+
         let mut samples: Vec<f32> = Vec::new();
         while let Ok(sample) = self.receiver.try_recv() {
             samples.push(sample);
@@ -115,7 +154,6 @@ impl AudioRecorder {
 
         let mut writer = WavWriter::create(save_path, spec)?;
         for sample in samples {
-            // Convert f32 back to i16 for whisper
             let amplitude = i16::MAX as f32;
             let i16_sample = (sample * amplitude).clamp(-amplitude, amplitude) as i16;
             writer.write_sample(i16_sample)?;
@@ -124,4 +162,16 @@ impl AudioRecorder {
 
         Ok(())
     }
+}
+
+pub fn list_input_devices() -> Result<Vec<String>> {
+    let host = cpal::default_host();
+    let devices = host.input_devices()?;
+    let mut names = Vec::new();
+    for device in devices {
+        if let Ok(name) = device.name() {
+            names.push(name);
+        }
+    }
+    Ok(names)
 }

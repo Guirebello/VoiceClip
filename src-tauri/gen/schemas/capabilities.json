@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities for VoiceClip","local":true,"windows":["badge","settings","stats"],"permissions":["core:default","core:window:default","core:window:allow-start-dragging","core:window:allow-set-always-on-top","core:window:allow-outer-position","core:window:allow-close","core:window:allow-set-focus","process:default"]}}

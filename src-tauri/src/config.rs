@@ -5,12 +5,17 @@ use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Config {
     pub model_name: String,
     pub hotkey: String,
     pub badge_opacity: f32,
     pub max_recording_duration: u32,
     pub append_mode: bool,
+    pub microphone: Option<String>,
+    pub always_on_top: bool,
+    pub badge_x: Option<i32>,
+    pub badge_y: Option<i32>,
 }
 
 impl Default for Config {
@@ -21,6 +26,10 @@ impl Default for Config {
             badge_opacity: 0.8,
             max_recording_duration: 120,
             append_mode: false,
+            microphone: None,
+            always_on_top: true,
+            badge_x: None,
+            badge_y: None,
         }
     }
 }
@@ -33,7 +42,6 @@ impl Config {
     }
 
     pub fn get_models_dir() -> Result<PathBuf> {
-        // Check for bundled models next to executable first
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 let bundled_models = dir.join("models");
@@ -42,7 +50,6 @@ impl Config {
                 }
             }
         }
-        // Fallback to system data directory
         let proj_dirs = ProjectDirs::from("", "", "voiceclip")
             .context("Could not find project directories")?;
         Ok(proj_dirs.data_local_dir().join("models"))
@@ -66,7 +73,7 @@ impl Config {
 
         let contents = fs::read_to_string(&config_path)
             .with_context(|| format!("Failed to read config file at {:?}", config_path))?;
-        
+
         let config: Config = toml::from_str(&contents)
             .with_context(|| format!("Failed to parse config file at {:?}", config_path))?;
 
