@@ -124,10 +124,8 @@ jobs:
 
       - name: Package release archive
         run: |
-          mkdir -p staging
           cp src-tauri/target/release/VoiceClip.exe staging/
           cp whisper.cpp/build/bin/Release/whisper-cli.exe staging/
-          cp -r staging/models staging/
           cd staging
           Compress-Archive -Path * -DestinationPath ../VoiceClip-windows-x86_64.zip
         shell: pwsh
